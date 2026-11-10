@@ -4,6 +4,9 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Four Color Showdown</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Silkscreen&display=swap">
   <style>
     html, body { margin: 0; height: 100%; background: #1b1918; }
     body { display: flex; align-items: center; justify-content: center; overflow: hidden; }
@@ -13,10 +16,19 @@
       cursor: none;
       box-shadow: 0 0 0 4px #111, 0 0 0 8px #d63057;
     }
+    .home {
+      position: fixed; right: 12px; bottom: 12px; z-index: 1;
+      padding: 6px 10px 7px;
+      font: 14px/1 'Silkscreen', monospace; color: #e5e3e0; text-decoration: none;
+      background: #1b1918; box-shadow: 0 0 0 2px #d63057, 4px 4px 0 2px #111;
+      opacity: .55; transition: opacity .15s;
+    }
+    .home:hover, .home:focus-visible { opacity: 1; color: #1b1918; background: #d63057; outline: none; }
   </style>
 </head>
 <body>
   <canvas id="game"></canvas>
+  <a class="home" href="../../../">&lt; Demolition Games</a>
   <script type="module" src="./main.js"></script>
 </body>
 </html>

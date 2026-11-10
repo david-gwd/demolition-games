@@ -5,6 +5,7 @@ export function createInput(canvas, W, H) {
     pressed: new Set(),
     mouse: { x: W / 2, y: H / 2, down: false, clicked: false, released: false },
     wheel: 0,
+    side: 0, // Maus-Seitentasten: -1 zurück, +1 vor
     down(code) { return this.keys.has(code); },
     hit(code) { return this.pressed.has(code); },
     endFrame() {
@@ -12,6 +13,7 @@ export function createInput(canvas, W, H) {
       this.mouse.clicked = false;
       this.mouse.released = false;
       this.wheel = 0;
+      this.side = 0;
     },
   };
 
@@ -29,11 +31,14 @@ export function createInput(canvas, W, H) {
     inp.mouse.y = ((e.clientY - r.top) / r.height) * H;
   });
   canvas.addEventListener('mousedown', (e) => {
+    if (e.button === 3 || e.button === 4) { e.preventDefault(); inp.side += e.button === 3 ? -1 : 1; return; }
     if (e.button !== 0) return;
     inp.mouse.down = true;
     inp.mouse.clicked = true;
   });
   addEventListener('mouseup', (e) => {
+    // Seitentasten lösen sonst Browser-Zurück/Vor aus
+    if (e.button === 3 || e.button === 4) { e.preventDefault(); return; }
     if (e.button !== 0 || !inp.mouse.down) return;
     inp.mouse.down = false;
     inp.mouse.released = true;

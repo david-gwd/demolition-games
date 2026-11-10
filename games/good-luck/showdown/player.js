@@ -23,6 +23,7 @@ export function updatePlayer(g, dt) {
   if (inp.hit('KeyQ')) want = (p.active + 3) % 4;
   if (inp.hit('KeyE')) want = (p.active + 1) % 4;
   if (inp.wheel) want = (p.active + inp.wheel + 4) % 4;
+  if (inp.side) want = (p.active + inp.side + 4) % 4;
   if (want >= 0 && want !== p.active && p.swapCool <= 0) {
     p.active = want; p.swapCool = 0.2; p.glitch = 0.15; p.charge = 0; p.cool = Math.min(p.cool, 0.08);
     sfx.swap();
