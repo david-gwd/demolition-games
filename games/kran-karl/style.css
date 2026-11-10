@@ -1,0 +1,67 @@
+:root {
+  --bg: #0f1d2b;
+  --btn: #f2b134;
+  --btn-on: #ffd36e;
+  --controls-h: 0px;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  height: 100%;
+  background: var(--bg);
+  overflow: hidden;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+#wrap {
+  height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+#game {
+  display: block;
+  width: min(100vw, calc((100dvh - var(--controls-h)) * 16 / 9));
+  aspect-ratio: 16 / 9;
+  background: #5fb4e8;
+  border-radius: 6px;
+}
+
+#touch {
+  display: none;
+  width: min(100vw, 960px);
+  padding: 0 16px;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+#touch .group { display: flex; gap: 8px; }
+
+#touch button {
+  font: bold 22px "Trebuchet MS", system-ui, sans-serif;
+  width: 64px;
+  height: 64px;
+  border: none;
+  border-radius: 14px;
+  background: var(--btn);
+  color: #3a2200;
+  box-shadow: 0 4px 0 #a86f12;
+  touch-action: none;
+}
+
+#touch button.big { width: auto; padding: 0 18px; font-size: 16px; }
+#touch button.small { width: 44px; }
+#touch button[hidden] { display: none; }
+#touch button.on { background: var(--btn-on); transform: translateY(3px); box-shadow: 0 1px 0 #a86f12; }
+
+@media (pointer: coarse) {
+  :root { --controls-h: 90px; }
+  #touch { display: flex; }
+}

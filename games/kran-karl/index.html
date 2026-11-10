@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Kran-Karl</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <main id="wrap">
+    <canvas id="game" width="960" height="540" aria-label="Kran-Karl Spielfeld"></canvas>
+    <div id="touch">
+      <div class="group">
+        <button data-key="left" aria-label="Links">◀</button>
+        <button data-key="right" aria-label="Rechts">▶</button>
+      </div>
+      <div class="group">
+        <button data-key="up" aria-label="Seil hoch">▲</button>
+        <button data-key="down" aria-label="Seil runter">▼</button>
+      </div>
+      <div class="group">
+        <button data-key="mute" class="small" aria-label="Ton an/aus">♪</button>
+        <button data-key="pause" class="small" aria-label="Pause">II</button>
+        <button data-key="spreader" class="small" aria-label="Doppelgriff" hidden>2×</button>
+        <button data-key="action" class="big">GREIFEN / LOS</button>
+      </div>
+    </div>
+  </main>
+  <script type="module" src="src/main.js"></script>
+</body>
+</html>

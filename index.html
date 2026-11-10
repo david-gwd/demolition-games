@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Demolition Games</title>
+  <meta name="description" content="Kleine Browser-Spiele. Groß kaputt.">
+  <meta name="theme-color" content="#1a0715">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%23240a1d'/%3E%3Cpath d='M9 7h7a9 9 0 0 1 0 18H9z' fill='%23f4e6cf'/%3E%3Cpath d='M13 11h3a5 5 0 0 1 0 10h-3z' fill='%23f2702a'/%3E%3C/svg%3E">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Stencil+Display:wght@900&family=IBM+Plex+Mono:wght@400;500&family=Lilita+One&family=Silkscreen:wght@700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="site.css">
+</head>
+<body>
+  <div class="bg" aria-hidden="true">
+    <div class="bg__base"></div>
+    <div class="bg__streaks"></div>
+    <div class="bg__blaze"></div>
+    <div class="bg__filaments"></div>
+    <div class="bg__dust"></div>
+    <div class="bg__grain"></div>
+  </div>
+
+  <header class="masthead">
+    <h1>Demolition<br>Games</h1>
+    <p>kleine Spiele · groß kaputt</p>
+  </header>
+
+  <!-- Neues Spiel: Ordner nach games/, Cover nach assets/covers/, hier eine Karte ergänzen (siehe README). -->
+  <main class="games">
+    <a class="card card--kran-karl" href="games/kran-karl/">
+      <img src="assets/covers/kran-karl.jpg" alt="" width="1600" height="830">
+      <span class="card__title">Kran-Karl</span>
+      <span class="card__tag">Der Containerkran-Simulator, den niemand bestellt hat.</span>
+    </a>
+
+    <a class="card card--showdown" href="games/good-luck/showdown/">
+      <img src="assets/covers/four-color-showdown.png" alt="" width="320" height="146">
+      <span class="card__title" aria-label="Four Color Showdown">
+        <span class="four" aria-hidden="true"><i>F</i><i>O</i><i>U</i><i>R</i> <i>C</i><i>O</i><i>L</i><i>O</i><i>R</i></span>
+        <span aria-hidden="true">Showdown</span>
+      </span>
+      <span class="card__badge">Maus + Tastatur</span>
+      <span class="card__tag">Vier Killjoys, vier Farben, endlose Dracs.</span>
+    </a>
+
+    <div class="card card--soon">Nr. 03 · in der Werkstatt</div>
+  </main>
+</body>
+</html>

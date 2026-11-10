@@ -1,0 +1,6 @@
+.DS_Store
+
+# Fremde Referenzbilder: nur lokal, nicht veröffentlichen
+mockups/background_*
+mockups/website_*
+games/good-luck/inspiration/
