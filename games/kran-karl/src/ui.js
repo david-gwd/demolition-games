@@ -175,6 +175,10 @@ export class UI {
     const blink = Math.floor(this.t * 4) % 2 === 0;
     let x = 10;
     const lv = g.level;
+    if (lv.toss) {
+      this.drawTossHud(ctx, g);
+      return;
+    }
     const name = lv.daily ? 'Tagesschicht' : lv.endless ? `Kap. ${lv.chapter} · ∞+${lv.n}` : `Schicht ${lv.chapter}-${lv.n}`;
     x += this.pill(ctx, name, x, 8) + 8;
     x += this.pill(ctx, `Punkte ${g.score}`, x, 8) + 8;
@@ -206,6 +210,7 @@ export class UI {
       x2 += this.pill(ctx, text, x2, 40, { color: d.phase === 'docked' && d.timer < 8 && blink ? '#ff9d5c' : '#bdf5c4' }) + 8;
     }
     if (ev.inspecting) x2 += this.pill(ctx, `Inspektor schaut zu: ${Math.ceil(ev.inspect)} s`, x2, 40, { color: '#ffd23f' }) + 8;
+    if (ev.zone > 0) x2 += this.pill(ctx, `Baustelle: ${Math.ceil(ev.zone)} s`, x2, 40, { color: '#f2c12e' }) + 8;
     if (ev.has('tide')) {
       const rising = Math.cos((ev.t / 70) * Math.PI * 2) > 0;
       x2 += this.pill(ctx, rising ? 'Flut ↑' : 'Ebbe ↓', x2, 40, { color: '#bfe8ff' }) + 8;
@@ -214,6 +219,23 @@ export class UI {
 
     if (g.ship.heelOn && Math.abs(g.ship.heel) > HEEL_WARN && blink) {
       label(ctx, '⚠ SCHLAGSEITE!', W / 2 + 120, 112, { size: 20, color: '#ff8a3d', align: 'center' });
+    }
+  }
+
+  // Feierabend-Weitwurf: Würfe statt Zeit, weitester Wurf statt Combo
+  drawTossHud(ctx, g) {
+    let x = 10;
+    x += this.pill(ctx, 'Feierabend-Weitwurf', x, 8, { color: '#ffd23f' }) + 8;
+    x += this.pill(ctx, `Wurf ${Math.min(g.tossed, g.level.goal)}/${g.level.goal}`, x, 8) + 8;
+    x += this.pill(ctx, `Punkte ${g.score}`, x, 8) + 8;
+    if (g.stats.longestThrow) this.pill(ctx, `Weitester ${g.stats.longestThrow} m`, x, 8, { color: '#7fd3ff' });
+    let rx = W - 10;
+    rx -= this.pill(ctx, `Rekord heute ${this.best}`, rx, 8, { align: 'right' }) + 8;
+    if (this.muted) rx -= this.pill(ctx, 'Ton aus', rx, 8, { align: 'right', color: '#aaa' }) + 8;
+    if (Math.abs(g.wind) > 5) {
+      const arrows = (g.wind > 0 ? '→' : '←').repeat(Math.min(3, 1 + Math.floor(Math.abs(g.wind) / 60)));
+      const exact = g.mods.anemometer ? ` ${Math.round(Math.abs(g.wind))}` : '';
+      this.pill(ctx, `Wind ${arrows}${exact}`, rx, 8, { align: 'right', color: '#bfe8ff' });
     }
   }
 
@@ -451,6 +473,7 @@ export class UI {
     ];
     if (newRecord) lines[1] += '  – neuer Rekord!';
     lines.push(g.level.daily && res.dailyFirst ? `Lohn: +${Math.round(res.coins * 1.5)} € (Tagesbonus ×1,5)` : `Lohn: +${res.coins} €`);
+    if (g.stats.throws) lines.push(`Weitester Wurf: ${g.stats.longestThrow} m`);
     this.screen(ctx, 'Schiff ist raus!', lines, 'Leertaste: Weiter', '#7ee081', 330);
 
     const quarter = Math.round(STAR_TIME * 100);
@@ -469,8 +492,25 @@ export class UI {
       g.loseReason,
       `Punkte: ${g.score}${newRecord ? '  (neuer Rekord!)' : ''}`,
       `Trostpflaster: +${res.coins} € Lohn`,
-      '',
+      g.stats.throws ? `Weitester Wurf: ${g.stats.longestThrow} m` : '',
       'Morgen um 6 wieder hier.',
     ], 'Leertaste: Zum Schichtplan', '#ff6b5b');
+  }
+
+  // rec: { newRecord, allTime } aus Progress.recordToss; best: Tagesrekord, allTime: Bestwert für immer
+  drawTossEnd(ctx, g, rec, best, allTime) {
+    const hits = g.tossLog.filter(e => e.hit && e.hit.name !== 'Ponton');
+    const bulls = hits.filter(e => e.hit.mult === 3).length;
+    let first = `Punkte: ${g.score}`;
+    if (rec.allTime) first += '  – Bestwert!';
+    else if (rec.newRecord) first += '  – Tagesrekord!';
+    this.screen(ctx, 'Feierabend!', [
+      first,
+      `Weitester Wurf: ${g.stats.longestThrow} m`,
+      `Treffer: ${hits.length} von ${g.level.goal}${bulls ? `  (davon ${bulls}× Volltreffer)` : ''}`,
+      `Rekord heute: ${best}   ·   Bestwert: ${allTime}`,
+      '',
+      'Morgen gibt\'s neue Ziele.',
+    ], 'Leertaste: Zum Schichtplan', '#7fd3ff');
   }
 }

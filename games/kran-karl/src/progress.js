@@ -19,6 +19,7 @@ const fresh = () => ({
   rareSeen: {},
   notes: {}, // gelesene Zettel vom Chef
   daily: { date: '', best: 0 },
+  toss: { date: '', best: 0, allTime: 0 }, // Feierabend-Weitwurf: Bestwert heute und für immer
 });
 
 // Spielstand der ersten Version: Schichten 1..9, darüber Endlos-Schichten
@@ -130,11 +131,25 @@ export class Progress {
     return { newRecord, promoted };
   }
 
+  // Feierabend-Weitwurf: kein Lohn, nur Rekorde. Gibt { newRecord, allTime } zurück.
+  recordToss(level, score, longest) {
+    const t = this.data.toss;
+    if (t.date !== level.key) Object.assign(t, { date: level.key, best: 0 });
+    const newRecord = score > t.best;
+    if (newRecord) t.best = score;
+    const allTime = score > t.allTime;
+    if (allTime) t.allTime = score;
+    const s = this.data.stats;
+    s.longestThrow = Math.max(s.longestThrow || 0, longest);
+    this.save();
+    return { newRecord, allTime };
+  }
+
   // Lebenszeit-Statistik aus den Zählern einer Schicht
   addStats(shift, won) {
     const s = this.data.stats;
     for (const [k, v] of Object.entries(shift)) {
-      if (k === 'maxCombo') s.maxCombo = Math.max(s.maxCombo || 0, v);
+      if (k === 'maxCombo' || k === 'longestThrow') s[k] = Math.max(s[k] || 0, v);
       else if (typeof v === 'number') s[k] = (s[k] || 0) + v;
     }
     s.shifts = (s.shifts || 0) + 1;

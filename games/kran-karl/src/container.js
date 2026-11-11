@@ -20,6 +20,13 @@ export class Box {
     this.ignoreCol = -1;
     this.ignoreT = 0;
     this.dead = false;
+    // nur bei Würfen vom Haken: Abwurfpunkt, aufsummierte Drehung, knapp verfehlte Vögel
+    this.thrown = false;
+    this.fromX = x;
+    this.fromY = y;
+    this.fromTrolley = x; // Position der Laufkatze beim Abwurf
+    this.rot = 0;
+    this.nearGulls = new Set();
   }
 
   get cargos() { return this.extra ? [this.cargo, this.extra] : [this.cargo]; }

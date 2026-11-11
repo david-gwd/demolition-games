@@ -24,6 +24,11 @@ export const SHIP_DECK_Y = 404;
 export const STAR_TIME = 0.25;
 export const STAR_PERFECT = 0.4;
 
+// Würfe: ein Container (60 px) ist gut 12 m lang. Ab THROW_MIN_M zählt ein Wurf als Weitwurf.
+export const PX_PER_M = 5;
+export const THROW_MIN_M = 30;
+export const throwMeters = (b, x) => (b.thrown ? Math.abs(x - b.fromX) / PX_PER_M : 0);
+
 // Zufall mit Seed (für die Tagesschicht). Zwei getrennte Ströme, damit die Fracht-Reihenfolge
 // nicht davon abhängt, wie oft das Spiel sonst gewürfelt hat.
 export function mulberry32(a) {

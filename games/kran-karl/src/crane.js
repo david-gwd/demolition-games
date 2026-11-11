@@ -8,6 +8,7 @@ const ROPE_SPEED = 130;
 const ROPE_MIN = 40;
 const ROPE_MAX = 330;
 const DAMPING = 0.2;
+const PUSH = 200; // so schnell schiebt die Baustelle die Laufkatze aus dem gesperrten Abschnitt
 const TOP = GANTRY_Y + 10; // Aufhängepunkt des Seils
 export const DEFAULT_PAINT = { beam: '#e8672f', leg: '#d9542b', line: '#a83c1c', trolley: '#f2b134' };
 
@@ -22,6 +23,9 @@ export class Crane {
     this.look = look || { paint: DEFAULT_PAINT, hat: 'none' };
     this.x = 300;
     this.v = 0;
+    // erlaubter Bereich der Laufkatze (Baustelle, Abwurflinie) – vom Spiel pro Frame gesetzt
+    this.minX = TROLLEY_MIN;
+    this.maxX = TROLLEY_MAX;
     this.len = 120;
     this.theta = 0;
     this.omega = 0;
@@ -66,12 +70,22 @@ export class Crane {
       this.v = Math.abs(this.v) <= b ? 0 : this.v - Math.sign(this.v) * b;
     }
     this.v = clamp(this.v, -maxSpeed, maxSpeed);
+    const prevX = this.x;
     this.x += this.v * dt;
 
     let clang = false;
     if (this.x < TROLLEY_MIN || this.x > TROLLEY_MAX) {
       clang = Math.abs(this.v) > 80;
       this.x = clamp(this.x, TROLLEY_MIN, TROLLEY_MAX);
+      this.v = 0;
+    }
+    // Sperrgrenze: von außen kommend anhalten, von innen (Sperre beginnt gerade) hinausschieben
+    // (v bleibt beim Schieben 0, sonst schaukelt der Ruck die Ladung wild auf)
+    if (this.x < this.minX) {
+      this.x = prevX < this.minX ? Math.min(this.minX, prevX + PUSH * dt) : this.minX;
+      this.v = 0;
+    } else if (this.x > this.maxX) {
+      this.x = prevX > this.maxX ? Math.max(this.maxX, prevX - PUSH * dt) : this.maxX;
       this.v = 0;
     }
     const a = (this.v - oldV) / dt;

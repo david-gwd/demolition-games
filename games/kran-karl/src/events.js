@@ -1,4 +1,4 @@
-import { W, H, SEA_Y, GROUND_Y, GANTRY_Y, STACK_X, QUAY_X1, PIER_X0, PUB, GRAVITY, rand, rnd, frand, clamp } from './config.js';
+import { W, H, SEA_Y, GROUND_Y, GANTRY_Y, STACK_X, QUAY_X1, PIER_X0, PUB, GRAVITY, TROLLEY_MIN, TROLLEY_MAX, rand, rnd, frand, clamp } from './config.js';
 import { Gull } from './world.js';
 import { label } from './ui.js';
 import { lineFor } from './content.js';
@@ -7,9 +7,10 @@ import { sfx } from './audio.js';
 export const EVENT_NAMES = {
   fog: 'Nebel', night: 'Nacht', swarm: 'Schwarm', boat: 'Barkasse', storm: 'Gewitter', tide: 'Gezeiten',
   inspector: 'Inspektor', floes: 'Eisschollen', snowstorm: 'Schneesturm', monsoon: 'Monsun', monkeys: 'Affen',
+  zone: 'Baustelle',
 };
 
-const FIRST_DELAY = { swarm: 8, boat: 10, storm: 6, snowstorm: 5, monsoon: 6, inspector: 12, monkeys: 8 };
+const FIRST_DELAY = { swarm: 8, boat: 10, storm: 6, snowstorm: 5, monsoon: 6, inspector: 12, monkeys: 8, zone: 14 };
 const GUSTY = { storm: 1.6, snowstorm: 1.7, monsoon: 1.5 };
 const SWARM_SHAPE = [[0, 0], [32, -14], [32, 14], [64, -28], [64, 28]];
 const BOAT_DY = 18;
@@ -18,6 +19,7 @@ const TIDE_PERIOD = 70;
 const INSPECT_TIME = 20;
 const ROPE_TOP = GANTRY_Y + 10;
 const MONKEY_RIDE = 5;
+const ZONE_TIME = 20;
 
 // Besondere Vorkommnisse einer Schicht – auch mehrere gleichzeitig
 export class Events {
@@ -49,6 +51,9 @@ export class Events {
     this.inspect = 0;
     this.inspectWarn = 0;
     this.inspX = -40;
+    this.zone = 0; // Restzeit der Schienensperre
+    this.zoneWarn = 0;
+    this.zoneRange = null; // { x0, x1 }: gesperrter Abschnitt der Kranschiene
     this.floes = this.types.has('floes')
       ? Array.from({ length: 3 }, (_, i) => ({ x: QUAY_X1 + 120 + i * 230 + rand(-40, 40), w: rand(52, 78), v: rand(10, 20) * (rnd() < 0.5 ? -1 : 1) }))
       : [];
@@ -60,6 +65,13 @@ export class Events {
 
   has(t) { return this.types.has(t); }
   get inspecting() { return this.inspect > 0; }
+
+  // Erlaubter Bereich der Laufkatze, solange die Schiene gesperrt ist (sonst null)
+  trolleyLimits() {
+    if (this.zone <= 0) return null;
+    const r = this.zoneRange;
+    return r.x0 <= TROLLEY_MIN ? { min: r.x1, max: TROLLEY_MAX } : { min: TROLLEY_MIN, max: r.x0 };
+  }
 
   say(g, key, cargo = null) { g.ui.say(lineFor(key, g.world.theme.lines, cargo)); }
 
@@ -80,6 +92,7 @@ export class Events {
     }
     if (this.has('tide')) this.tide = TIDE_AMP * Math.sin((this.t / TIDE_PERIOD) * Math.PI * 2);
     if (this.has('inspector')) this.updateInspector(dt, g, live);
+    if (this.has('zone')) this.updateZone(dt, g, live);
     if (this.has('floes')) boost = Math.max(boost, this.updateFloes(dt, g));
     if (this.monkey) this.updateMonkey(dt, g, live);
     this.waveBoost += (boost - this.waveBoost) * Math.min(1, dt * 1.2);
@@ -170,7 +183,10 @@ export class Events {
     }
     if (this.inspectWarn > 0) {
       this.inspectWarn -= dt;
-      if (this.inspectWarn <= 0) this.inspect = INSPECT_TIME;
+      if (this.inspectWarn <= 0) {
+        this.inspect = INSPECT_TIME;
+        this.say(g, 'inspectorNoThrow');
+      }
       return;
     }
     this.timers.inspector -= dt;
@@ -179,6 +195,82 @@ export class Events {
       this.say(g, 'inspectorCome');
       sfx.whistle();
     }
+  }
+
+  // Baustelle: ein Stück Kranschiene ist gesperrt – beim Laden über der hinteren Schiffshälfte,
+  // beim Löschen über dem Kai. Dahin kommt man nur noch per Wurf.
+  updateZone(dt, g, live) {
+    if (this.zone > 0) {
+      this.zone -= dt;
+      // Funken vom Schweißgerät
+      if (Math.random() < 0.35) {
+        const r = this.zoneRange;
+        const x = r.x0 <= TROLLEY_MIN ? r.x1 - 30 : r.x0 + 30;
+        g.world.particles.add({
+          x: x + frand(-6, 6), y: GANTRY_Y + 2, vx: frand(-90, 90), vy: frand(-120, 20), gravity: GRAVITY * 0.6,
+          life: 0.5, size: 2, color: Math.random() < 0.5 ? '#ffd23f' : '#fff3b0',
+        });
+      }
+      if (this.zone <= 0) {
+        this.say(g, 'zoneOff');
+        this.timers.zone = rand(18, 26);
+      }
+      return;
+    }
+    if (this.zoneWarn > 0) {
+      this.zoneWarn -= dt;
+      if (this.zoneWarn <= 0) {
+        this.zone = ZONE_TIME;
+        this.say(g, 'zoneOn');
+        sfx.clang();
+      }
+      return;
+    }
+    this.timers.zone -= dt;
+    if (this.timers.zone <= 0 && live) {
+      this.zoneRange = g.mode === 'unload'
+        ? { x0: 0, x1: QUAY_X1 + 80 }
+        : { x0: Math.round(g.ship.pivotX), x1: W };
+      this.zoneWarn = 2 + this.early;
+      this.say(g, 'zoneCome');
+      sfx.whistle();
+    }
+  }
+
+  // Gelb-schwarze Absperrung auf der Kranbrücke, Schild an der Grenze
+  drawZone(ctx) {
+    if (!this.zoneRange || (this.zone <= 0 && this.zoneWarn <= 0)) return;
+    const { x0, x1 } = this.zoneRange;
+    const on = this.zone > 0;
+    const blink = Math.floor(this.t * 5) % 2 === 0;
+    if (!on && !blink) return;
+    ctx.save();
+    ctx.globalAlpha = on ? 0.9 : 0.55;
+    ctx.beginPath();
+    ctx.rect(x0, GANTRY_Y - 10, x1 - x0, 12);
+    ctx.clip();
+    for (let x = x0 - 24; x < x1 + 12; x += 24) {
+      ctx.fillStyle = '#f2c12e';
+      ctx.beginPath();
+      ctx.moveTo(x, GANTRY_Y + 2);
+      ctx.lineTo(x + 12, GANTRY_Y - 10);
+      ctx.lineTo(x + 24, GANTRY_Y - 10);
+      ctx.lineTo(x + 12, GANTRY_Y + 2);
+      ctx.fill();
+    }
+    ctx.restore();
+    if (!on) return;
+    // Sperrbalken mit Schild an der Grenze
+    const bx = x0 <= TROLLEY_MIN ? x1 : x0;
+    ctx.fillStyle = '#c0261b';
+    ctx.fillRect(bx - 3, GANTRY_Y - 26, 6, 40);
+    ctx.fillStyle = '#fff';
+    ctx.fillRect(bx - 3, GANTRY_Y - 18, 6, 6);
+    ctx.fillRect(bx - 3, GANTRY_Y - 2, 6, 6);
+    const sx = x0 <= TROLLEY_MIN ? bx - 66 : bx + 6;
+    ctx.fillStyle = '#c0261b';
+    ctx.fillRect(sx, GANTRY_Y + 4, 60, 16);
+    label(ctx, 'GESPERRT', sx + 30, GANTRY_Y + 16, { size: 10, color: '#fff', align: 'center', outline: null });
   }
 
   // Treibende Eisschollen; gibt den Wellen-Faktor zurück
@@ -307,6 +399,7 @@ export class Events {
     for (const f of this.floes) this.drawFloe(ctx, f, g.world);
     if (this.boat) this.drawBoat(ctx);
     if (this.has('inspector') && this.inspX > -30) this.drawInspector(ctx);
+    if (this.has('zone')) this.drawZone(ctx);
     const m = this.monkey;
     if (m && ['fall', 'swim', 'run'].includes(m.state)) this.drawMonkey(ctx, m);
   }
@@ -469,6 +562,10 @@ export class Events {
     }
     if (this.boatWarn > 0 && blink) {
       label(ctx, '◀ Barkasse ⚠', W - 16, SEA_Y - 14, { size: 18, color: '#ffd23f', align: 'right' });
+    }
+    if (this.zoneWarn > 0 && blink) {
+      const r = this.zoneRange;
+      label(ctx, '⚠ Baustelle kommt!', (r.x0 + r.x1) / 2, GANTRY_Y + 44, { size: 18, color: '#ffd23f', align: 'center' });
     }
     if (this.inspectWarn > 0 && blink) {
       label(ctx, '⚠ Inspektor kommt!', STACK_X + 60, GROUND_Y - 150, { size: 18, color: '#ffd23f', align: 'center' });

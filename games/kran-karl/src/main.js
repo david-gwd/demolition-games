@@ -42,13 +42,14 @@ const input = new Input(canvas, document.querySelectorAll('[data-key]'), {
 });
 const screens = new Screens(progress, input);
 
-// title | select | shop | achievements | options | playing | paused | note | levelEnd | gameOver | promotion
+// title | select | shop | achievements | options | playing | paused | note | levelEnd | gameOver | promotion | tossEnd
 let state = 'title';
 let screenT = 0;
 let titleCursor = 0;
 let optionsReturn = 'title';
 let result = null; // Ergebnis der letzten Schicht (Game.result())
 let newRecord = false;
+let tossRec = null; // Ergebnis des letzten Feierabend-Weitwurfs (Progress.recordToss)
 let pendingKey = null; // Schicht hinter dem Zettel vom Chef
 let promotion = null; // Kapitel, dessen Beförderung gezeigt wird
 let pendingPromotion = null;
@@ -58,9 +59,15 @@ function go(next) {
   screenT = 0;
 }
 
+// Rekorde für die Kreidetafel an der Kneipe
+function showRecords() {
+  game.world.records = { far: progress.stats.longestThrow || 0, toss: progress.data.toss.allTime };
+}
+
 function showTitle() {
   setSeed(null);
   game.startLevel(levelKey(Math.max(1, progress.openChapters()), 1), getMods(), getLook(progress));
+  showRecords();
   game.phase = 'idle';
   ui.reset();
   go('title');
@@ -104,8 +111,11 @@ function startLevel(key) {
   const lv = getLevel(key);
   setSeed(lv.daily ? lv.seed : null);
   const mods = getMods(progress.upgrades, settings.easy);
-  ui.best = lv.daily ? (progress.data.daily.date === key ? progress.data.daily.best : 0) : progress.bestFor(key);
+  if (lv.daily) ui.best = progress.data.daily.date === key ? progress.data.daily.best : 0;
+  else if (lv.toss) ui.best = progress.data.toss.date === key ? progress.data.toss.best : 0;
+  else ui.best = progress.bestFor(key);
   game.startLevel(key, mods, getLook(progress));
+  showRecords();
   game.ghost = settings.ghost ? GhostPlayer.load(key) : null;
   game.recorder = new GhostRecorder();
   if (spreaderBtn) spreaderBtn.hidden = !mods.spreader;
@@ -129,8 +139,26 @@ function saveRare() {
   if (changed) progress.save();
 }
 
+// Feierabend-Weitwurf: kein Lohn, keine Schicht – nur Rekorde, weitester Wurf und Abzeichen
+function finishToss() {
+  const lv = game.level;
+  result = game.result();
+  tossRec = progress.recordToss(lv, result.score, game.stats.longestThrow);
+  newRecord = tossRec.newRecord;
+  if (newRecord) game.recorder.save(lv.key);
+  saveRare();
+  toastAchievements(checkAchievements(progress, game.stats, { won: false, level: lv, result, progress }));
+  showRecords();
+  sfx.win();
+  go('tossEnd');
+}
+
 function finishLevel() {
   const lv = game.level;
+  if (lv.toss) {
+    finishToss();
+    return;
+  }
   result = game.result();
   const rec = progress.record(lv, result);
   result.dailyFirst = !!rec.first;
@@ -187,6 +215,7 @@ function updateMenu(presses, act, tap) {
     const cmd = ready ? screens.updateSelect(presses, act, tap) : null;
     if (cmd?.type === 'start') requestLevel(cmd.key);
     else if (cmd?.type === 'daily') startLevel(`daily-${today()}`);
+    else if (cmd?.type === 'toss') startLevel(`toss-${today()}`);
     else if (cmd?.type) go(cmd.type);
   } else if (state === 'shop') {
     if (back || (ready && screens.updateShop(presses, act, tap))) go('select');
@@ -279,6 +308,7 @@ function frame(now) {
     ui.drawPromotion(ctx, PROMOTIONS[promotion], next ? next.name : null, screenT);
   } else if (state === 'levelEnd') ui.drawLevelEnd(ctx, game, result, newRecord, screenT);
   else if (state === 'gameOver') ui.drawGameOver(ctx, game, result, newRecord);
+  else if (state === 'tossEnd') ui.drawTossEnd(ctx, game, tossRec, progress.data.toss.best, progress.data.toss.allTime);
   ui.drawToasts(ctx);
 
   requestAnimationFrame(frame);

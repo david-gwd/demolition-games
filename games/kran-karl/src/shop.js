@@ -9,7 +9,9 @@ export const UPGRADES = [
   { id: 'lights', name: 'Nachtscheinwerfer', desc: 'Mehr Licht bei Nacht, weniger Nebel/Schnee.', costs: [90, 170] },
   { id: 'anemometer', name: 'Windmesser', desc: 'Böen, Schwärme und Boote früher ansagen.', costs: [110] },
   { id: 'ropebrake', name: 'Seilbremse', desc: 'Seil einholen schaukelt weniger auf.', costs: [100, 180] },
+  { id: 'aim', name: 'Wurfvisier', desc: 'Zeigt den Anfang der Flugbahn beim Werfen.', costs: [120, 220] },
 ];
+const AIM_STEPS = [0, 0.3, 0.55]; // Sekunden Flugbahn, die das Visier vorausrechnet
 
 // Spielwerte, die sich aus den gekauften Upgrades (und dem Einsteigermodus) ergeben
 export function getMods(upgrades = {}, easy = false) {
@@ -24,6 +26,7 @@ export function getMods(upgrades = {}, easy = false) {
     earlyWarn: upgrades.anemometer ? 1.5 : 0,
     anemometer: !!upgrades.anemometer,
     ropeBrake: upgrades.ropebrake || 0,
+    aim: AIM_STEPS[upgrades.aim || 0],
     moodMul: easy ? 0.5 : 1,
   };
 }

@@ -15,9 +15,10 @@ const TILES = LEVELS_PER_CHAPTER + 1; // letzte Kachel = Endlos-Schichten
 const TILE = { w: 164, h: 118, gap: 12, y0: 112 };
 const TILE_X0 = (W - COLS * TILE.w - (COLS - 1) * TILE.gap) / 2;
 const SEL_BTNS = [
-  { x: 130, y: 380, w: 220, h: 46, label: 'Werkstatt', type: 'shop' },
-  { x: 370, y: 380, w: 220, h: 46, label: 'Abzeichen', type: 'achievements' },
-  { x: 610, y: 380, w: 220, h: 46, label: 'Tagesschicht', type: 'daily' },
+  { x: 100, y: 380, w: 180, h: 46, label: 'Werkstatt', type: 'shop' },
+  { x: 290, y: 380, w: 180, h: 46, label: 'Abzeichen', type: 'achievements' },
+  { x: 480, y: 380, w: 180, h: 46, label: 'Tagesschicht', type: 'daily' },
+  { x: 670, y: 380, w: 190, h: 46, label: 'Feierabend-Wurf', type: 'toss' },
 ];
 const PAGE_L = { x: 4, y: 180, w: 40, h: 90 };
 const PAGE_R = { x: W - 44, y: 180, w: 40, h: 90 };
@@ -143,7 +144,7 @@ export class Screens {
     sfx.page();
   }
 
-  // Gibt {type:'start', key} | {type:'shop'|'achievements'|'daily'} | null zurück
+  // Gibt {type:'start', key} | {type:'shop'|'achievements'|'daily'|'toss'} | null zurück
   updateSelect(presses, action, tap) {
     if (tap && inside(tap, PAGE_L)) { this.flip('left'); return null; }
     if (tap && inside(tap, PAGE_R)) { this.flip('right'); return null; }
@@ -222,8 +223,12 @@ export class Screens {
         const d = p.data.daily;
         text = d.date === `daily-${today()}` ? `Tagesschicht · ${d.best}` : 'Tagesschicht ★ neu';
       }
+      if (b.type === 'toss') {
+        const d = p.data.toss;
+        text = d.date === `toss-${today()}` ? `Weitwurf · ${d.best}` : 'Weitwurf ★ neu';
+      }
       if (b.type === 'achievements') text = `Abzeichen ${Object.keys(p.data.achievements).length}/${ACHIEVEMENTS.length}`;
-      button(ctx, b, text, this.sel.cursor === TILES + i, 18);
+      button(ctx, b, text, this.sel.cursor === TILES + i, 17);
     });
     hint(ctx, t, 'Pfeiltasten: wählen (am Rand blättern)   ·   Leertaste: los   ·   Esc: Titel', 470);
   }
@@ -233,7 +238,7 @@ export class Screens {
   shopRects() {
     const tabs = [{ x: W / 2 - 210, y: 82, w: 200, h: 36 }, { x: W / 2 + 10, y: 82, w: 200, h: 36 }];
     const items = this.shop.tab === 'up'
-      ? UPGRADES.map((_, i) => ({ x: 130 + (i % 2) * 355, y: 130 + Math.floor(i / 2) * 78, w: 345, h: 68 }))
+      ? UPGRADES.map((_, i) => ({ x: 130 + (i % 2) * 355, y: 128 + Math.floor(i / 2) * 64, w: 345, h: 58 }))
       : COSMETICS.map(c => {
         const row = SLOTS.findIndex(s => s.id === c.slot);
         const idx = COSMETICS.filter(x => x.slot === c.slot).indexOf(c);
@@ -286,18 +291,18 @@ export class Screens {
         const cost = nextCost(p, up);
         const affordable = cost !== null && cost <= p.coins;
         panel(ctx, r, { fill: 'rgba(35, 57, 91, 0.92)', focus: cur === i + 2 });
-        label(ctx, up.name, r.x + 14, r.y + 27, { size: 17, outline: null });
-        label(ctx, up.desc, r.x + 14, r.y + 50, { size: 12, color: '#c9d4de', outline: null });
+        label(ctx, up.name, r.x + 14, r.y + 24, { size: 17, outline: null });
+        label(ctx, up.desc, r.x + 14, r.y + 45, { size: 12, color: '#c9d4de', outline: null });
         ctx.font = `bold 17px ${FONT}`;
         const px = r.x + 26 + ctx.measureText(up.name).width;
         up.costs.forEach((_, s) => {
           ctx.fillStyle = s < lvl ? '#ffd23f' : 'rgba(255,255,255,0.2)';
           ctx.beginPath();
-          ctx.arc(px + s * 14, r.y + 21, 4.5, 0, Math.PI * 2);
+          ctx.arc(px + s * 14, r.y + 18, 4.5, 0, Math.PI * 2);
           ctx.fill();
         });
-        if (cost === null) label(ctx, 'MAX', r.x + r.w - 14, r.y + 27, { size: 17, color: '#7ee081', align: 'right', outline: null });
-        else label(ctx, `${cost} €`, r.x + r.w - 14, r.y + 27, { size: 17, color: affordable ? '#ffd23f' : '#8792a0', align: 'right', outline: null });
+        if (cost === null) label(ctx, 'MAX', r.x + r.w - 14, r.y + 24, { size: 17, color: '#7ee081', align: 'right', outline: null });
+        else label(ctx, `${cost} €`, r.x + r.w - 14, r.y + 24, { size: 17, color: affordable ? '#ffd23f' : '#8792a0', align: 'right', outline: null });
       });
     } else {
       const c = p.data.cosmetics;
@@ -365,7 +370,7 @@ export class Screens {
   // ---------- Abzeichen ----------
 
   achRects() {
-    const list = ACHIEVEMENTS.map((_, i) => ({ x: 48 + (i % 5) * 176, y: 84 + Math.floor(i / 5) * 62, w: 168, h: 54 }));
+    const list = ACHIEVEMENTS.map((_, i) => ({ x: 48 + (i % 5) * 176, y: 82 + Math.floor(i / 5) * 52, w: 168, h: 46 }));
     return [...list, BACK_BTN];
   }
 
@@ -384,9 +389,9 @@ export class Screens {
       const r = rects[i];
       const has = !!got[a.id];
       panel(ctx, r, { fill: has ? 'rgba(122, 90, 18, 0.85)' : 'rgba(45, 55, 68, 0.8)', focus: this.ach.cursor === i, radius: 10 });
-      star(ctx, r.x + 18, r.y + 27, 10, has);
-      label(ctx, a.name, r.x + 34, r.y + 24, { size: 13, color: has ? '#ffe9a8' : '#9aa6b2', outline: null });
-      label(ctx, a.coins ? `+${a.coins} €` : 'Ehre', r.x + 34, r.y + 42, { size: 11, color: has ? '#7ee081' : '#7f8a96', outline: null });
+      star(ctx, r.x + 18, r.y + 23, 10, has);
+      label(ctx, a.name, r.x + 34, r.y + 20, { size: 13, color: has ? '#ffe9a8' : '#9aa6b2', outline: null });
+      label(ctx, a.coins ? `+${a.coins} €` : 'Ehre', r.x + 34, r.y + 37, { size: 11, color: has ? '#7ee081' : '#7f8a96', outline: null });
     });
     const sel = ACHIEVEMENTS[this.ach.cursor];
     if (sel) label(ctx, `${sel.name}: ${sel.desc}`, W / 2, 404, { size: 16, align: 'center' });

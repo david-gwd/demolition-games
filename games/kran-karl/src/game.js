@@ -1,6 +1,6 @@
 import {
   W, GRAVITY, BOX_W, BOX_H, GROUND_Y, SEA_Y, QUAY_X1, PIER_X0, PUB, STACK_X, STAR_TIME, STAR_PERFECT,
-  clamp, rnd, frand, fpick,
+  TROLLEY_MIN, TROLLEY_MAX, THROW_MIN_M, throwMeters, clamp, rnd, frand, fpick,
 } from './config.js';
 import { Crane } from './crane.js';
 import { Ship, HEEL_SLIDE, SLIPPERY_SLIDE, FEEDER_TIME } from './ship.js';
@@ -13,6 +13,7 @@ import { lineFor, WEIGHT_NAMES, REEFER_TIME } from './content.js';
 import { freshShiftStats } from './achievements.js';
 import { sfx } from './audio.js';
 import { tag } from './ui.js';
+import { TossTargets, TOSS_LINE } from './toss.js';
 
 const IDLE = { left: false, right: false, up: false, down: false };
 const PERFECT_OFFSET = 8;
@@ -24,6 +25,11 @@ const GRAB_DY = 22;
 const GRAB_SPEED = 200;
 const ALIVE_PATIENCE = 6; // Sekunden am Haken, bevor Lebendfracht seekrank wird
 const FEEDER_SHAPE = { cols: 3, layers: 2, deckLeft: 222, deckY: 410, name: 'FEEDER FRIEDA', small: true };
+
+const THROW_WIND = 0.7; // Wind packt geworfene Container stärker als abrutschende
+const THROW_TALK_SPEED = 250; // ab diesem Tempo kommentiert lebende/zerbrechliche Fracht den Wurf
+const ROLL = Math.PI;
+const RELEASE_SPIN = 0.9; // Drall beim Loslassen (genug Schwung macht Rollen und Saltos möglich)
 
 const hitsBox = (bx, by, hh, cx, cy, r) => Math.abs(cx - bx) < BOX_W / 2 + r && Math.abs(cy - by) < hh + r;
 const overlapsPub = (x, y, hh) => x + BOX_W / 2 > PUB.x0 && x - BOX_W / 2 < PUB.x1
@@ -44,9 +50,13 @@ export class Game {
     this.ghost = null;
     this.recorder = null;
     this.steps = 0;
+    this.toss = null; // Ziele im Feierabend-Weitwurf
   }
 
-  get ships() { return this.feeder ? [this.ship, this.feeder] : [this.ship]; }
+  get ships() {
+    if (this.toss) return [];
+    return this.feeder ? [this.ship, this.feeder] : [this.ship];
+  }
 
   // key: Schicht-Schlüssel (z. B. "2-5"); mods: Werkstatt; look: Kosmetik
   startLevel(key, mods = this.mods, look = null) {
@@ -62,6 +72,11 @@ export class Game {
     this.feeder?.reset(this.level);
     this.world.reset(this.level, this.ship.planColors, look);
     this.events.reset(this.level, mods);
+    this.toss = this.level.toss ? new TossTargets() : null;
+    this.toss?.reset(this.level.seed);
+    if (this.toss) this.crane.x = STACK_X + 60;
+    this.tossed = 0; // im Weitwurf: schon geworfene Container
+    this.tossLog = []; // im Weitwurf: { m, pts, hit } je Wurf
     this.boxes = [];
     this.score = 0;
     this.timeLeft = this.level.time;
@@ -89,6 +104,11 @@ export class Game {
     this.lines = this.world.theme.lines;
     const unload = this.mode === 'unload';
     this.ui.reset();
+    if (this.toss) {
+      this.ui.showBanner(this.level.name, `${this.level.goal} Container · so weit und so genau wie möglich`);
+      this.say('toss');
+      return;
+    }
     this.ui.showBanner(
       this.level.daily ? this.level.name : `Schicht ${this.level.endless ? '∞' : this.levelN}: ${this.level.name}`,
       `${unload ? 'Lösche' : 'Lade'} ${this.level.goal} Container in ${this.level.time} Sekunden`,
@@ -105,6 +125,7 @@ export class Game {
 
   // Geladene bzw. gelöschte Container (beim Laden zählt der Feeder mit)
   progress() {
+    if (this.toss) return this.tossed;
     if (this.mode === 'unload') return this.delivered;
     return this.ship.count() + this.feederShipped + (this.feeder ? this.feeder.count() : 0);
   }
@@ -114,6 +135,8 @@ export class Game {
   // Ergebnis der Schicht: Sterne (Soll, Zeit, Perfekt) und Lohn
   result() {
     const won = this.outcome === 'win';
+    // Weitwurf: keine Sterne, kein Lohn
+    if (this.toss) return { won, score: this.score, stars: [false], coins: 0 };
     return {
       won,
       score: this.score,
@@ -135,6 +158,7 @@ export class Game {
   }
 
   changeMood(d) {
+    if (this.toss) return; // Feierabend: der Chef ist schon zu Hause
     this.mood = clamp(this.mood + (d < 0 ? d * this.mods.moodMul : d), 0, 100);
     if (this.mood <= 0 && this.phase === 'play') {
       this.phase = 'fired';
@@ -168,7 +192,15 @@ export class Game {
       : 0;
 
     const playing = this.phase === 'play';
-    if (playing) {
+    if (playing && this.toss) {
+      this.steps++;
+      this.recorder?.step(this.crane);
+      if (this.tossed >= lv.goal && !this.crane.cargo && !this.boxes.some(b => b.state === 'falling' || b.state === 'tipping')) {
+        this.phase = 'done';
+        this.endTimer = 1.6;
+        sfx.horn();
+      }
+    } else if (playing) {
       this.steps++;
       this.recorder?.step(this.crane);
       this.timeLeft = Math.max(0, this.timeLeft - dt);
@@ -187,6 +219,10 @@ export class Game {
       else if (this.mode === 'unload' && this.shipCleared()) this.endLevel('full');
     }
 
+    // Baustelle bzw. Abwurflinie begrenzen die Laufkatze
+    const lim = this.toss ? { min: TROLLEY_MIN, max: TOSS_LINE } : this.events.trolleyLimits();
+    this.crane.minX = lim ? lim.min : TROLLEY_MIN;
+    this.crane.maxX = lim ? lim.max : TROLLEY_MAX;
     const hookOnShip = this.mode === 'unload' && !this.crane.cargo;
     if (this.crane.update(dt, playing ? input : IDLE, this.wind, (x, hw) => this.floorAt(x, hw, hookOnShip))) sfx.clang();
     if (playing && action) this.handleAction();
@@ -201,6 +237,7 @@ export class Game {
     this.world.tide = this.events.tide;
     if (this.feeder) this.updateFeeder(dt);
     this.world.update(dt, this.wind);
+    this.toss?.update(dt);
     if (this.world.friendArrived) {
       this.world.friendArrived = false;
       this.say('gullFriend');
@@ -211,10 +248,12 @@ export class Game {
     if (playing) this.tickReefers(dt);
     this.ui.update(dt);
 
-    if (this.phase === 'depart' || this.phase === 'fired') {
+    if (this.phase === 'depart' || this.phase === 'fired' || this.phase === 'done') {
       this.endTimer -= dt;
       if (this.endTimer <= 0 && !this.outcome) {
-        if (this.phase === 'fired') {
+        if (this.phase === 'done') {
+          this.outcome = 'win';
+        } else if (this.phase === 'fired') {
           this.outcome = 'lose';
         } else if (this.progress() >= lv.goal) {
           this.outcome = 'win';
@@ -296,8 +335,17 @@ export class Game {
       box.vx = v.vx;
       box.vy = v.vy;
       box.angle = -c.theta;
-      box.spin = -c.omega * 0.6;
+      box.spin = -c.omega * RELEASE_SPIN;
+      box.thrown = true;
+      box.fromTrolley = c.x;
       this.boxes.push(box);
+      if (this.toss) this.tossed += box.cargos.length;
+      if (Math.abs(v.vx) > THROW_TALK_SPEED) {
+        const alive = box.cargos.find(x => x.alive);
+        const fragile = box.cargos.find(x => x.fragile && !x.broken);
+        if (alive) this.say('throwAlive', alive);
+        else if (fragile) this.say('throwFragile', fragile);
+      }
       c.cargo = null;
       c.extra = null;
       sfx.release();
@@ -368,7 +416,11 @@ export class Game {
   refillStack() {
     if (this.mode === 'unload') return;
     if (this.world.stack.length || Math.abs(this.crane.hookX - STACK_X) < 90) return;
+    // Weitwurf: nur so viele nachlegen, wie noch Würfe übrig sind
+    const left = this.toss ? this.level.goal - this.tossed - (this.crane.cargo ? this.crane.loadH / BOX_H : 0) : Infinity;
+    if (left <= 0) return;
     this.world.refillStack();
+    if (this.world.stack.length > left) this.world.stack.length = left;
     sfx.refill();
     this.ui.float('Nachschub!', STACK_X, this.world.stackTopY() - 16, '#bfe8ff');
     this.dust(STACK_X, GROUND_Y - 4);
@@ -435,16 +487,20 @@ export class Game {
     const hh = b.h / 2;
     const weight = b.cargo.weight + (b.extra?.weight || 0);
     b.vy += GRAVITY * (b.cargo.floaty ? 0.45 : 1) * dt;
-    b.vx += this.wind * 0.4 / (0.6 + weight) * dt;
+    b.vx += this.wind * (b.thrown ? THROW_WIND : 0.4) / (0.6 + weight) * dt;
     b.x += b.vx * dt;
     b.y += b.vy * dt;
     b.angle += b.spin * dt;
     b.ignoreT -= dt;
+    if (b.thrown) b.rot += Math.abs(b.spin * dt);
 
     for (const g of this.world.gulls) {
-      if (g.hittable && !b.hitGulls.has(g) && hitsBox(b.x, b.y, hh, g.x, g.y, 12)) {
+      if (!g.hittable || b.hitGulls.has(g)) continue;
+      if (hitsBox(b.x, b.y, hh, g.x, g.y, 12)) {
         b.hitGulls.add(g);
         this.hitGull(g);
+      } else if (b.thrown && hitsBox(b.x, b.y, hh, g.x, g.y, 34)) {
+        b.nearGulls.add(g); // knapp vorbei: zählt für den Möwen-Slalom
       }
     }
     if (!b.hitPub && overlapsPub(b.x, b.y, hh)) {
@@ -452,6 +508,17 @@ export class Game {
       this.hitPub(b.x, b.y);
       b.vx = -Math.abs(b.vx) * 0.4 - 60;
       b.spin = -3;
+    }
+
+    if (this.toss) {
+      const hit = this.toss.landing(b, py, x => this.world.waveY(x));
+      if (hit) {
+        b.dead = true;
+        sfx.land();
+        this.dust(b.x, hit.y);
+        this.tossScore(b, b.x, hit.y - b.h, hit);
+        return;
+      }
     }
 
     // Kai, Stapel/Lkw oder Steg
@@ -572,11 +639,15 @@ export class Game {
   }
 
   // Punkte, Laune und Effekte für eine geglückte Landung; (x, y) = Oberkante des Containers
-  reward(perfect, x, y, cargos) {
+  // box: der gelandete Container (für Wurfweite und Tricks), fehlt bei Retouren u. Ä.
+  reward(perfect, x, y, cargos, box = null) {
     const insp = this.events.inspecting;
+    const far = box ? throwMeters(box, x) : 0;
+    const banned = insp && far >= THROW_MIN_M; // unter Aufsicht wird nicht geworfen
     this.stats.landed += cargos.length;
-    if (perfect) {
-      this.combo++;
+    if (perfect && !banned) {
+      // Volltreffer (perfekt aus der Ferne) zählt in der Combo doppelt
+      this.combo += far >= THROW_MIN_M ? 2 : 1;
       this.perfects++;
       this.stats.perfects++;
       this.stats.maxCombo = Math.max(this.stats.maxCombo, this.combo);
@@ -595,6 +666,13 @@ export class Game {
         return { x, y: y + BOX_H / 2, vx: Math.cos(a) * 160, vy: Math.sin(a) * 160, drag: 4, life: 0.7, size: 3, color: '#ffe14d' };
       });
       if (!insp && Math.random() < 0.4) this.say('perfect');
+    } else if (banned) {
+      this.combo = 0;
+      this.score -= 50;
+      this.ui.float('Inspektor: Wurfverbot! -50', x, y - 12, '#ff8a7a', true);
+      this.changeMood(-8);
+      sfx.land();
+      this.say('inspectorThrow');
     } else if (insp) {
       // unter Aufsicht zählt nur Perfektion
       this.combo = 0;
@@ -620,6 +698,79 @@ export class Game {
       for (const c of cargos) if (c.fragile && !c.broken) this.breakCargo(c, x, y);
     }
     for (const c of cargos) this.rareLanded(c, x, y);
+    if (box && !banned) this.throwBonus(box, x, y, perfect, far);
+  }
+
+  // Weitwurf-Bonus, Volltreffer und Tricks nach einer geglückten Landung
+  throwBonus(b, x, y, perfect, far) {
+    if (!b.thrown) return;
+    const s = this.stats;
+    s.longestThrow = Math.max(s.longestThrow, Math.round(far));
+    let fy = y - 40;
+    if (far >= THROW_MIN_M) {
+      s.throws++;
+      const pts = Math.round((far - 25) * 4);
+      this.score += pts;
+      this.ui.float(`Weitwurf! ${Math.round(far)} m +${pts}`, x, fy, '#7fd3ff', true);
+      fy -= 24;
+      if (perfect) {
+        this.ui.float('VOLLTREFFER!', x, fy, '#ff9d5c', true);
+        fy -= 24;
+        this.changeMood(6);
+        this.say('bullseye');
+      } else if (Math.random() < 0.5) {
+        this.say('far');
+      }
+    }
+    this.tricks(b, x, fy, perfect);
+  }
+
+  // Rolle/Salto in der Luft und Möwen-Slalom; gibt true zurück, wenn ein Trick dabei war
+  tricks(b, x, y, perfect) {
+    const s = this.stats;
+    let fy = y;
+    let trick = false;
+    if (b.rot >= ROLL) {
+      const salto = b.rot >= 2 * ROLL;
+      const pts = salto ? 200 : 75;
+      this.score += pts;
+      if (salto) s.saltos++;
+      if (perfect) s.acrobat++;
+      this.ui.float(`${salto ? 'Salto' : 'Rolle'}! +${pts}`, x, fy, '#c99bff', true);
+      fy -= 24;
+      trick = true;
+    }
+    const near = [...b.nearGulls].filter(g => !b.hitGulls.has(g)).length;
+    if (near >= 2 && !b.hitGulls.size) {
+      s.slaloms++;
+      this.score += 40 * near;
+      this.ui.float(`Möwen-Slalom! +${40 * near}`, x, fy, '#bdf5c4', true);
+      trick = true;
+    }
+    return trick;
+  }
+
+  // Feierabend-Weitwurf: Meter plus Zielpunkte; hit = { name, base, mult } oder null
+  tossScore(b, x, y, hit) {
+    const s = this.stats;
+    const m = Math.round(throwMeters(b, x));
+    s.longestThrow = Math.max(s.longestThrow, m);
+    if (m >= THROW_MIN_M) s.throws++;
+    const bonus = hit ? hit.base * hit.mult : 0;
+    const pts = m + bonus;
+    this.score += pts;
+    this.tossLog.push({ m, pts, hit });
+    this.ui.float(`${m} m +${pts}`, x, y, '#7fd3ff', true);
+    if (hit) {
+      const bull = hit.mult === 3;
+      const what = bull ? `${hit.name}: VOLLTREFFER ×3` : `${hit.name} ×${hit.mult}`;
+      this.ui.float(what, x, y - 24, bull ? '#ff9d5c' : '#ffd23f', true);
+      sfx.perfect(hit.mult);
+      if (bull) this.say('bullseye');
+    } else if (m >= THROW_MIN_M && Math.random() < 0.3) {
+      this.say('far');
+    }
+    this.tricks(b, x, y - 48, hit?.mult === 3);
   }
 
   breakCargo(c, x, y) {
@@ -665,7 +816,9 @@ export class Game {
     if (crushed) {
       this.crush(crushed, top.x, top.y);
     } else {
-      this.reward(perfect, top.x, top.y, b.cargos);
+      this.reward(perfect, top.x, top.y, b.cargos, b);
+      // Laufkatze noch über dem Kai, Container landet in der hinteren Hälfte des großen Schiffs
+      if (b.thrown && b.fromTrolley < QUAY_X1 && s === this.ship && res.col >= s.colCount / 2) this.stats.across++;
     }
 
     if (s.plan && b.cargos.some(c => s.plan[res.col] === c.color)) {
@@ -706,6 +859,17 @@ export class Game {
   dockLanding(b) {
     b.dead = true;
     this.dust(b.x, b.y + b.h / 2);
+    if (this.toss) {
+      sfx.land();
+      if (b.x < W / 2) {
+        this.ui.float('Zu kurz!', b.x, b.y - 20, '#ffd6a0', true);
+        this.tossLog.push({ m: 0, pts: 0, hit: null });
+      } else {
+        this.tossScore(b, b.x, b.y - 20, null);
+        this.say('pier');
+      }
+      return;
+    }
     if (b.x >= W / 2) {
       this.combo = 0;
       sfx.land();
@@ -749,7 +913,7 @@ export class Game {
     }
     this.world.loadTruck(b.cargo, b.extra, b.x - STACK_X);
     sfx.truck();
-    this.reward(off < TRUCK_PERFECT, b.x, GROUND_Y - TRUCK_H - b.h, b.cargos);
+    this.reward(off < TRUCK_PERFECT, b.x, GROUND_Y - TRUCK_H - b.h, b.cargos, b);
   }
 
   splash(b) {
@@ -766,6 +930,16 @@ export class Game {
       gravity: GRAVITY, life: 0.9, size: frand(2, 4), color: '#bfe8ff',
     }));
     sfx.splash();
+    if (this.toss) {
+      // Weitwurf: Wasser ist hier das Ziel
+      const ducks = b.cargos.find(c => c.ducks);
+      if (ducks) {
+        this.world.spawnDucks(b.x, 14);
+        this.stats.ducks += 14;
+      }
+      this.tossScore(b, b.x, y - 30, this.toss.ringHit(b.x));
+      return;
+    }
     this.ui.float('PLATSCH!', b.x, y - 30, '#7fd3ff', true);
     const rare = b.cargos.find(c => c.rare);
     const ducks = b.cargos.find(c => c.ducks);
@@ -900,19 +1074,51 @@ export class Game {
     return t;
   }
 
+  // Wurfvisier: rechnet den Anfang der Flugbahn voraus (gleiche Physik wie updateFalling)
+  drawAim(ctx) {
+    const c = this.crane;
+    if (!this.mods.aim || !c.cargo || this.phase !== 'play') return;
+    const p = c.cargoCenter();
+    const v = c.hookVelocity();
+    const grav = GRAVITY * (c.cargo.floaty ? 0.45 : 1);
+    const drift = this.wind * THROW_WIND / (0.6 + c.weight);
+    const dt = 1 / 60;
+    let { x, y } = p, { vx, vy } = v;
+    ctx.save();
+    ctx.fillStyle = '#fff';
+    ctx.strokeStyle = 'rgba(0, 0, 0, 0.5)';
+    ctx.lineWidth = 1;
+    for (let i = 1; i * dt <= this.mods.aim; i++) {
+      vy += grav * dt;
+      vx += drift * dt;
+      x += vx * dt;
+      y += vy * dt;
+      if (i % 4) continue;
+      ctx.globalAlpha = 0.85 * (1 - (i * dt) / this.mods.aim) + 0.1;
+      ctx.beginPath();
+      ctx.arc(x, y, 3, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+
   draw(ctx, hud) {
     const w = this.world;
     w.drawBackground(ctx);
     this.feeder?.draw(ctx);
     w.drawLand(ctx, this.wind);
     for (const b of this.boxes) if (b.state === 'sinking') drawLoad(ctx, b.cargo, b.extra, b.x, b.y, b.angle);
-    this.ship.draw(ctx);
+    if (!this.toss) this.ship.draw(ctx);
     w.drawWater(ctx);
+    this.toss?.draw(ctx, x => w.waveY(x));
     w.drawDucks(ctx);
     this.events.drawWorld(ctx, this);
     for (const b of this.boxes) if (b.state !== 'sinking') drawLoad(ctx, b.cargo, b.extra, b.x, b.y, b.angle);
     if (hud && this.ghost) this.ghost.draw(ctx, this.steps);
+    if (this.toss) this.toss.drawLine(ctx);
     this.crane.draw(ctx);
+    if (hud) this.drawAim(ctx);
     this.events.drawAbove(ctx);
     w.drawGulls(ctx);
     w.particles.draw(ctx);
@@ -925,13 +1131,17 @@ export class Game {
         const p = c.cargoCenter();
         tag(ctx, this.cargoTag(c.extra || c.cargo), p.x, p.y + c.loadH / 2 + 16);
         if (c.extra) tag(ctx, this.cargoTag(c.cargo), p.x, p.y + c.loadH / 2 + 34);
+        // Windmesser: Richtung und Stärke direkt an der Fracht, zum Gegenhalten beim Zielen
+        if (this.mods.anemometer && Math.abs(this.wind) > 5) {
+          tag(ctx, `Wind ${this.wind > 0 ? '→' : '←'} ${Math.round(Math.abs(this.wind))}`, p.x, p.y + c.loadH / 2 + (c.extra ? 52 : 34));
+        }
       } else if (w.stack.length) {
         const top = w.stack[w.stack.length - 1];
         tag(ctx, `Nächster: ${this.cargoTag(top)}`, STACK_X, w.stackTopY() - 10);
       }
       this.ui.drawHud(ctx, this);
     }
-    this.ui.drawChef(ctx, this.mood, w.theme.chef);
+    if (!this.toss) this.ui.drawChef(ctx, this.mood, w.theme.chef);
     this.ui.drawFloaters(ctx);
   }
 }

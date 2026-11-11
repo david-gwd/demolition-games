@@ -28,6 +28,9 @@ export const ACHIEVEMENTS = [
   { id: 'ch3', name: 'Hafenlegende', desc: 'Kapitel 3 geschafft', coins: 0, test: (s, l, x) => !!x.progress.data.promoted[3] },
   { id: 'endless5', name: 'Unermüdlich', desc: 'Eine Endlos-Schicht +5 gewonnen', coins: 100, test: (s, l, x) => x.won && x.level.endless && x.level.n >= 5 },
   { id: 'daily7', name: 'Stammbelegschaft', desc: '7 Tagesschichten gespielt', coins: 80, test: (s, l) => (l.dailies || 0) >= 7 },
+  { id: 'far', name: 'Fernlader', desc: 'Ein Wurf über 50 m', coins: 60, live: true, test: s => s.longestThrow >= 50 },
+  { id: 'across', name: 'Quer durchs Becken', desc: 'Vom Kai aus in die hintere Schiffshälfte geworfen', coins: 80, live: true, test: s => s.across > 0 },
+  { id: 'acrobat', name: 'Akrobat', desc: 'Rolle oder Salto mit perfekter Landung', coins: 60, live: true, test: s => s.acrobat > 0 },
   { id: 'veteran', name: 'Hafenurgestein', desc: '500 Container bewegt (insgesamt)', coins: 120, test: (s, l) => (l.landed || 0) >= 500 },
 ];
 
@@ -35,6 +38,7 @@ export const freshShiftStats = () => ({
   maxCombo: 0, splashes: 0, gullHits: 0, pubHits: 0, ducks: 0, crushes: 0, broken: 0, thawed: 0,
   reefersOk: 0, monkeysShaken: 0, monkeysStole: 0, iced: 0, doubles: 0, rare: 0, feederFull: 0,
   perfects: 0, inspectorPerfect: 0, landed: 0,
+  longestThrow: 0, throws: 0, saltos: 0, slaloms: 0, across: 0, acrobat: 0,
 });
 
 // Prüft Abzeichen, schaltet neue frei und zahlt die Prämie aus. Gibt die neuen zurück.

@@ -153,6 +153,8 @@ export const LINES = {
   inspectorGood: ['Der Inspektor nickt anerkennend.', 'Note eins!'],
   inspectorBad: ['Der Inspektor schreibt was auf …', 'Mangelhaft!', 'Das gibt eine Abmahnung.'],
   inspectorGone: ['Inspektor ist weg. Puh.'],
+  inspectorThrow: ['Werfen?! Unter MEINER Aufsicht?', 'Das ist ein Kran, kein Katapult!', 'Wurfverbot, Karl! Steht in Paragraf 7.'],
+  inspectorNoThrow: ['Solange der guckt: nicht werfen, Karl!', 'Inspektor da. Schön brav absetzen.'],
   tide: ['Ebbe und Flut, Karl. Das Schiff fährt Fahrstuhl.'],
   feederLeave: ['Frieda legt ab!', 'Tschüss, Frieda!'],
   feederFull: ['Frieda ist voll! Prämie!', 'Volle Ladung für Frieda!'],
@@ -166,6 +168,14 @@ export const LINES = {
   monkeyOff: ['Und tschüss, Affe!', 'Platsch-Affe!', 'Der kommt wieder. Die kommen immer wieder.'],
   monkeySteal: ['Der Affe hat ausgeräumt!', 'Alles weg. Nur noch Bananenschalen.'],
   spreader: ['Doppelgriff! Zwei auf einen Streich.'],
+  far: ['Was für ein Wurf!', 'Hat das jemand gefilmt?!', 'Karl, der Hafen-Hammerwerfer!', 'Da staunt die Möwe.'],
+  bullseye: ['Volltreffer! Mitten rein!', 'Zielwasser getrunken, Karl?', 'Das war kein Glück. Oder doch?'],
+  throwAlive: ['„{cargo}": Wiiiiiii!', 'Da drin schreit was. Vor Freude, hoffentlich.', '„{cargo}" lernt fliegen!'],
+  throwFragile: ['Das ist ZERBRECHLICH, Karl!', 'Bitte, bitte sanft landen …', 'Ich kann nicht hinsehen!'],
+  zoneCome: ['Baustelle auf der Schiene! Gleich ist da gesperrt.', 'Die Schienenbauer kommen. Dann musst du werfen!'],
+  zoneOn: ['Schiene gesperrt! Ab jetzt wird geworfen.', 'Da kommst du nicht hin, Karl. Werfen!'],
+  zoneOff: ['Schiene wieder frei!', 'Baustelle ist durch. Ausnahmsweise pünktlich.'],
+  toss: ['Feierabend! Zehn Container, wer wirft am weitesten?', 'Nach Dienstschluss zählt nur die Weite.'],
 };
 
 // Ein Satz aus LINES (oder den Hafen-Sprüchen), {cargo} wird ersetzt

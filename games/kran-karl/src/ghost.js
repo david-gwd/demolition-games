@@ -35,10 +35,11 @@ export class GhostRecorder {
     this.data.push(Math.round(crane.x), Math.round(crane.hookX), Math.round(crane.hookY), crane.cargo ? (crane.extra ? 2 : 1) : 0);
   }
 
-  // Bestleistung speichern; von Tagesschichten bleibt nur die neueste
+  // Bestleistung speichern; von Tagesschichten und Feierabend-Würfen bleibt nur die neueste
   save(key) {
     const all = loadAll();
-    if (key.startsWith('daily-')) for (const k of Object.keys(all)) if (k.startsWith('daily-')) delete all[k];
+    const dated = ['daily-', 'toss-'].find(p => key.startsWith(p));
+    if (dated) for (const k of Object.keys(all)) if (k.startsWith(dated)) delete all[k];
     all[key] = encode(this.data);
     try { localStorage.setItem(KEY, JSON.stringify(all)); } catch { /* Speicher voll: dann eben ohne Geist */ }
   }

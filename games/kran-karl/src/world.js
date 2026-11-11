@@ -235,6 +235,7 @@ export class World {
     this.cargoOpts = {};
     this.look = { paint: DEFAULT_PAINT, deco: 'none' };
     this.friendArrived = false;
+    this.records = { far: 0, toss: 0 }; // für die Kreidetafel: weitester Wurf, bester Feierabend
     this.truck = { x: STACK_X, state: 'ready', cargo: null, extra: null, dx: 0 };
     this.clouds = [
       { x: 120, y: 110, s: 1 }, { x: 420, y: 150, s: 0.7 }, { x: 640, y: 95, s: 1.2 }, { x: 880, y: 170, s: 0.8 },
@@ -483,10 +484,32 @@ export class World {
     }
 
     this.drawPub(ctx, wind);
+    this.drawChalkboard(ctx);
     this.drawGantry(ctx);
 
     this.stack.forEach((c, i) => drawBox(ctx, c, STACK_X, GROUND_Y - BOX_H * (i + 0.5)));
     if (this.unload) this.drawTruck(ctx);
+  }
+
+  // Kreidetafel der Kneipe, aufgestellt am Kai: die Wurf-Rekorde
+  drawChalkboard(ctx) {
+    const { far, toss } = this.records;
+    if (!far && !toss) return;
+    const x = 24, y = GROUND_Y - 44, w = 42, h = 34;
+    ctx.fillStyle = '#6b4423';
+    ctx.fillRect(x + 4, y + h, 3, 10);
+    ctx.fillRect(x + w - 7, y + h, 3, 10);
+    ctx.fillRect(x - 2, y - 2, w + 4, h + 4);
+    ctx.fillStyle = '#26332c';
+    ctx.fillRect(x, y, w, h);
+    ctx.fillStyle = '#e8ece4';
+    ctx.font = 'bold 7px "Trebuchet MS", system-ui, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('REKORDE', x + w / 2, y + 9);
+    ctx.fillRect(x + 8, y + 11, w - 16, 1);
+    ctx.font = '7px "Trebuchet MS", system-ui, sans-serif';
+    ctx.fillText(`Wurf ${far} m`, x + w / 2, y + 21);
+    ctx.fillText(`Abend ${toss}`, x + w / 2, y + 30);
   }
 
   // Kranbrücke im gekauften Lack

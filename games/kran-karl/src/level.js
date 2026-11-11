@@ -1,7 +1,7 @@
 import { mulberry32 } from './config.js';
 
-// mode: 'load' = Schiff beladen, 'unload' = Schiff löschen (auf den Lkw am Kai)
-// events: fog | night | swarm | boat | storm | tide | inspector | floes | snowstorm | monsoon | monkeys
+// mode: 'load' = Schiff beladen, 'unload' = Schiff löschen (auf den Lkw am Kai), 'toss' = Feierabend-Weitwurf
+// events: fog | night | swarm | boat | storm | tide | inspector | floes | snowstorm | monsoon | monkeys | zone
 // stackRule: schwer nicht auf leicht · reefers: Anteil Kühlcontainer · feeder: zweites, kleines Schiff
 // slippery: glattes Deck (im Eishafen immer, beim Monsun automatisch)
 const L = (name, mode, time, goal, wave, wind, gulls, opts = {}) => ({
@@ -13,14 +13,14 @@ export const CHAPTERS = [
   {
     harbor: 'hafen',
     name: 'Heimathafen',
-    events: ['fog', 'swarm', 'night', 'boat', 'storm', 'tide', 'inspector'],
+    events: ['fog', 'swarm', 'night', 'boat', 'storm', 'tide', 'inspector', 'zone'],
     levels: [
       L('Ententeich', 'load', 100, 5, 2, 0, 1),
       L('Retourenwelle', 'unload', 100, 5, 2, 0, 1),
       L('Leichter Seegang', 'load', 105, 7, 4, 0, 2, { plan: true }),
       L('Nebelbank', 'unload', 105, 6, 4, 40, 1, { events: ['fog'] }),
       L('Schlagseite', 'load', 115, 9, 6, 60, 2, { heel: true, plan: true }),
-      L('Möwen-Alarm', 'unload', 115, 8, 6, 80, 2, { heel: true, events: ['swarm'] }),
+      L('Möwen-Alarm', 'unload', 115, 8, 6, 80, 2, { heel: true, events: ['swarm', 'zone'] }),
       L('Nachtschicht', 'load', 125, 11, 7, 100, 2, { heel: true, plan: true, events: ['night'] }),
       L('Querverkehr', 'unload', 125, 10, 8, 120, 3, { heel: true, events: ['boat'] }),
       L('Sturmflut', 'load', 135, 13, 10, 140, 3, { heel: true, plan: true, events: ['storm'] }),
@@ -29,7 +29,7 @@ export const CHAPTERS = [
   {
     harbor: 'eis',
     name: 'Eiskante',
-    events: ['floes', 'snowstorm', 'night', 'tide', 'inspector', 'swarm', 'fog'],
+    events: ['floes', 'snowstorm', 'night', 'tide', 'inspector', 'swarm', 'fog', 'zone'],
     base: { slippery: true, heel: true },
     levels: [
       L('Frostbeulen', 'load', 105, 7, 3, 30, 1),
@@ -38,7 +38,7 @@ export const CHAPTERS = [
       L('Ebbe & Flut', 'unload', 115, 8, 5, 70, 2, { events: ['tide'] }),
       L('Feeder Frieda', 'load', 120, 12, 6, 80, 2, { feeder: true }),
       L('Schneesturm', 'unload', 120, 9, 7, 100, 2, { events: ['snowstorm'] }),
-      L('Polarnacht', 'load', 130, 13, 7, 110, 2, { plan: true, stackRule: true, feeder: true, events: ['night'] }),
+      L('Polarnacht', 'load', 130, 13, 7, 110, 2, { plan: true, stackRule: true, feeder: true, events: ['night', 'zone'] }),
       L('Treibeis', 'unload', 130, 11, 8, 120, 3, { events: ['floes', 'tide'] }),
       L('Eiszeit', 'load', 140, 15, 10, 140, 3, { plan: true, stackRule: true, feeder: true, events: ['snowstorm'] }),
     ],
@@ -46,7 +46,7 @@ export const CHAPTERS = [
   {
     harbor: 'tropen',
     name: 'Palmenkai',
-    events: ['monkeys', 'monsoon', 'night', 'tide', 'inspector', 'boat', 'swarm'],
+    events: ['monkeys', 'monsoon', 'night', 'tide', 'inspector', 'boat', 'swarm', 'zone'],
     base: { heel: true },
     levels: [
       L('Kokosnuss-Express', 'load', 105, 8, 3, 30, 1, { reefers: 0.25 }),
@@ -54,7 +54,7 @@ export const CHAPTERS = [
       L('Kühlkette', 'load', 115, 10, 5, 60, 2, { plan: true, reefers: 0.3 }),
       L('Der Inspektor', 'unload', 115, 9, 6, 70, 2, { events: ['inspector'] }),
       L('Monsun', 'load', 125, 11, 7, 100, 2, { plan: true, events: ['monsoon'] }),
-      L('Doppelt hält besser', 'load', 125, 13, 7, 100, 2, { feeder: true, reefers: 0.25 }),
+      L('Doppelt hält besser', 'load', 125, 13, 7, 100, 2, { feeder: true, reefers: 0.25, events: ['zone'] }),
       L('Springflut', 'unload', 130, 11, 8, 120, 3, { events: ['tide', 'monkeys'] }),
       L('Tropennacht', 'load', 130, 13, 8, 120, 3, { plan: true, reefers: 0.25, events: ['night', 'inspector'] }),
       L('Hurrikan Hildegard', 'load', 140, 15, 11, 150, 3, { plan: true, stackRule: true, reefers: 0.2, events: ['monsoon', 'boat'] }),
@@ -151,6 +151,19 @@ export function dailyLevel(date) {
 
 export const dailySeed = date => Number(date);
 
+export const TOSS_THROWS = 10;
+
+// Feierabend-Weitwurf: zehn Container, kein Schiff, kein Zeitlimit; Wind, Ziele und Fracht aus dem Datum
+export function tossLevel(date) {
+  const seed = Number(date) * 3 + 1;
+  const r = mulberry32(seed);
+  return finish({
+    ...L('Feierabend-Weitwurf', 'toss', 0, TOSS_THROWS, 3 + Math.floor(r() * 4), 40 + Math.floor(r() * 90), 1 + Math.floor(r() * 2)),
+    toss: true,
+    seed,
+  }, 1, `toss-${date}`);
+}
+
 export function today() {
   const d = new Date();
   return `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}${String(d.getDate()).padStart(2, '0')}`;
@@ -158,6 +171,7 @@ export function today() {
 
 export function getLevel(key) {
   if (key.startsWith('daily-')) return dailyLevel(key.slice(6));
+  if (key.startsWith('toss-')) return tossLevel(key.slice(5));
   const p = parseKey(key);
   if (!p) return getLevel('1-1');
   if (p.endless) return endless(p.chapter, p.i);
